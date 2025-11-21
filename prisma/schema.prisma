@@ -1,0 +1,454 @@
+// Prisma Schema for Niche Musician Platform
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User & Authentication
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // User role
+  role String @default("user") // "user", "admin"
+
+  // Relations
+  accounts              Account[]
+  sessions              Session[]
+  profile               MusicianProfile?
+  tracks                Track[]
+  comments              Comment[]
+  likes                 Like[]
+  following             Follow[]                 @relation("UserFollowing")
+  followers             Follow[]                 @relation("UserFollowers")
+  playlists             Playlist[]
+  tasteVector           TasteVector?
+  sentMatches           CollaborationMatch[]     @relation("MatchInitiator")
+  receivedMatches       CollaborationMatch[]     @relation("MatchReceiver")
+  chatRoomsAsUser1      ChatRoom[]               @relation("ChatUser1")
+  chatRoomsAsUser2      ChatRoom[]               @relation("ChatUser2")
+  messages              Message[]
+}
+
+// OAuth
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Musician Profile (핵심 정체성)
+model MusicianProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Identity
+  stageName  String
+  bio        String? @db.Text
+  avatar     String?
+  coverImage String?
+  location   String?
+  website    String?
+
+  // Musical Identity
+  genres      String[] // ["Electronic", "Ambient"]
+  niches      String[] // ["Neo-Classical Fusion", "Cinematic Soundscapes"]
+  instruments String[] // ["Piano", "Synthesizer"]
+
+  // Stats
+  viewCount     Int @default(0)
+  followerCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // === 음악적 DNA 섹션 ===
+
+  // 음악 철학 & 기원 스토리
+  musicOriginStory String? @db.Text // "내 음악은 어떻게 시작되었나"
+  artisticMission  String? @db.Text // "내가 음악으로 말하고 싶은 것"
+  uniqueValue      String? @db.Text // "내 음악의 독특한 가치"
+
+  // 영향과 영감
+  influences         String[] // ["Ryuichi Sakamoto", "Nils Frahm", "Korean Folk"]
+  inspirationSources String[] // ["Nature", "Urban loneliness", "Sci-fi literature"]
+
+  // 감정 팔레트 (다차원 태그)
+  emotionalTags      String[] // ["melancholic", "hopeful", "contemplative"]
+  situationalTags    String[] // ["deep work", "morning meditation", "night drive"]
+  sensoryTags        String[] // ["warm", "crystalline", "organic", "layered"]
+  culturalReferences String[] // ["wabi-sabi", "cyberpunk", "minimalism"]
+
+  // 창작 과정
+  creativeProcess String?  @db.Text // "내가 음악을 만드는 방법"
+  toolsAndGear    String[] // ["Analog synthesizers", "Field recordings", "Piano"]
+
+  // 시각적 미학
+  visualAesthetic String?  @db.Text // 시각적 정체성 설명
+  colorPalette    String[] // ["#2C3E50", "#E74C3C", "#ECF0F1"]
+
+  // 협업 선호도
+  collaborationStyle String? // "Solo", "Selective", "Open"
+  lookingForCollab   Boolean  @default(false)
+  collabInterests    String[] // ["Vocalists", "Visual artists", "Producers"]
+
+  // 현재 탐구 중
+  currentExploration String? @db.Text // "지금 실험하고 있는 것"
+  experimentalWorks  Boolean @default(false)
+
+  // 메타데이터
+  profileCompleteness Int      @default(0) // 0-100, 프로필 완성도
+  lastProfileUpdate   DateTime @default(now()) @updatedAt
+
+  @@index([stageName])
+}
+
+// 새 모델: 취향 벡터 (Taste Vector) - 확장된 무드 퀴즈
+model TasteVector {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // === STAGE 1: Visual Mood Selection ===
+  selectedMoods String[] // ["kpop", "ballad", "graffiti", "retro"]
+  moodPriority  String[] // Drag order: 1st → 4th priority
+  colorPalette  String[] // Extracted hex codes
+
+  // 선호도 데이터
+  likedGenres     String[]
+  likedEmotions   String[]
+  likedSituations String[]
+  likedSensory    String[]
+
+  // === STAGE 2: Content Category Deep Dive ===
+  // Music
+  musicActivities    String[] // ["감상", "공연", "작곡", "노래방", "플레이리스트", "리뷰"]
+  musicGenres        String[] // Max 5
+  favoriteArtists    String[] // Top 3
+
+  // Books
+  bookActivities     String[] // ["혼자읽기", "북클럽", "필사", "서평", "강연"]
+  bookGenres         String[] // ["소설", "에세이", "시집"...]
+  recentBooks        String[] // ISBN or titles
+
+  // Visual Arts
+  artActivities      String[] // ["전시회", "사진", "그림", "수집", "큐레이션"]
+  artStyles          String[] // ["추상화", "사실주의"...]
+
+  // Food & Beverage
+  foodActivities     String[] // ["요리", "맛집", "페어링", "리뷰"]
+  foodPreferences    String[] // ["와인", "커피", "칵테일"...]
+
+  // === STAGE 3: Aesthetic & Social Context ===
+  // Aesthetic
+  personalColors     String[] // 3 hex colors
+  warmthLevel        Int      @default(50) // 0-100: 차가운 ← → 따뜻한
+  brightnessLevel    Int      @default(50) // 0-100: 어두운 ← → 밝은
+  moodKeywords       String[] // 3 keywords
+  trendSensitivity   Int      @default(50) // 0-100: 유행 안 탐 ← → 얼리어답터
+
+  // Social Context
+  socialSize         String?  // "혼자", "1-2명", "소그룹", "파티"
+  drinkingStyle      String?  // "좋아해", "가끔", "안마셔", "상관없어"
+  preferredTimeSlots String[] // ["저녁", "밤", "심야", "새벽"]
+  cafePreference     String?  // "창가", "구석", "바", "테라스"
+
+  // === Profile Metadata ===
+  personaLabel       String?  // AI-generated: "심야 독서 애호가"
+  completionStatus   String   @default("incomplete") // "incomplete", "stage1", "stage2", "complete"
+
+  // 행동 기반 학습 (기존)
+  playedArtists   String[] // 자주 듣는 아티스트 IDs
+  followedArtists String[] // 팔로우한 아티스트 IDs
+
+  // 시간대별 선호 (기존)
+  morningMood   String?
+  afternoonMood String?
+  eveningMood   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId])
+}
+
+// 새 모델: 뮤지션 간 연결 (Musician Connections)
+model MusicianConnection {
+  id             String @id @default(cuid())
+  fromMusicianId String
+  toMusicianId   String
+
+  connectionType String // "influences", "similar-vibe", "complementary"
+  reason         String? @db.Text // "같은 감성을 다른 방식으로 표현"
+  strength       Float   @default(0.5) // 0-1, 연결 강도
+
+  createdAt DateTime @default(now())
+
+  @@unique([fromMusicianId, toMusicianId])
+  @@index([fromMusicianId])
+  @@index([toMusicianId])
+}
+
+// Track (음악 작품)
+model Track {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Content
+  title       String
+  description String? @db.Text
+  audioUrl    String // Cloudinary URL
+  coverImage  String?
+  duration    Int? // seconds
+
+  // Metadata
+  genre String?
+  mood  String?
+  bpm   Int?
+  key   String?
+
+  // Tags for discovery
+  tags String[]
+
+  // Stats
+  playCount    Int @default(0)
+  likeCount    Int @default(0)
+  commentCount Int @default(0)
+
+  // Status
+  isPublished Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  comments       Comment[]
+  likes          Like[]
+  playlistTracks PlaylistTrack[]
+
+  @@index([userId])
+  @@index([isPublished])
+  @@index([createdAt])
+}
+
+// Social Features
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  trackId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, trackId])
+  @@index([userId])
+  @@index([trackId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  userId    String
+  trackId   String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([trackId])
+  @@index([createdAt])
+}
+
+// Playlist
+model Playlist {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String? @db.Text
+  coverImage  String?
+  isPublic    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tracks PlaylistTrack[]
+
+  @@index([userId])
+}
+
+model PlaylistTrack {
+  id         String   @id @default(cuid())
+  playlistId String
+  trackId    String
+  position   Int
+  addedAt    DateTime @default(now())
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, trackId])
+  @@index([playlistId])
+  @@index([trackId])
+}
+
+// Tutorial & Education
+model Tutorial {
+  id          String @id @default(cuid())
+  title       String
+  description String @db.Text
+  category    String // "AI Tools", "Marketing", "Production"
+  difficulty  String // "Beginner", "Intermediate", "Advanced"
+
+  videoUrl  String?
+  content   String   @db.Text // Markdown content
+  resources String[] // External links
+
+  isPublished Boolean @default(false)
+  viewCount   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([isPublished])
+}
+
+// Collaboration Matching System
+model CollaborationMatch {
+  id           String @id @default(cuid())
+  initiatorId  String
+  receiverId   String
+
+  // Match metadata
+  matchScore      Float   @default(0.0) // 0-100, 매칭 점수
+  status          String  @default("pending") // "pending", "accepted", "rejected", "expired"
+  matchReason     String? @db.Text // AI가 생성한 매칭 이유
+
+  // Match criteria (어떤 기준으로 매칭되었는지)
+  sharedGenres    String[] // 공통 장르
+  sharedNiches    String[] // 공통 니치
+  sharedEmotions  String[] // 공통 감정 태그
+  complementary   Boolean  @default(false) // 보완적 매칭 여부
+
+  // Collaboration details
+  proposedProject String? @db.Text // 제안된 프로젝트
+
+  // Admin management
+  isManualMatch   Boolean  @default(false) // 관리자가 수동으로 생성한 매칭
+  adminNotes      String?  @db.Text
+  reviewedByAdmin Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime? // 매칭 제안 만료일
+
+  initiator User @relation("MatchInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  receiver  User @relation("MatchReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([initiatorId, receiverId])
+  @@index([initiatorId])
+  @@index([receiverId])
+  @@index([status])
+  @@index([matchScore])
+  @@index([createdAt])
+}
+
+// Chat System
+model ChatRoom {
+  id       String @id @default(cuid())
+  user1Id  String
+  user2Id  String
+
+  // Room metadata
+  lastMessageAt DateTime?
+  isActive      Boolean   @default(true)
+
+  // Match reference (if chat started from a match)
+  matchId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user1    User      @relation("ChatUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2    User      @relation("ChatUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  chatRoomId String
+  senderId   String
+
+  content    String   @db.Text
+  isRead     Boolean  @default(false)
+
+  // File attachments (optional, for future)
+  attachments String[] // URLs to files
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  sender   User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([chatRoomId])
+  @@index([senderId])
+  @@index([createdAt])
+}
